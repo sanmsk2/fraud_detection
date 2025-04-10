@@ -1,0 +1,14 @@
+from pyspark.ml.classification import RandomForestClassifier
+from pyspark.ml import Pipeline
+
+# Initialize Random Forest Classifier
+rf = RandomForestClassifier(labelCol="is_fraud", featuresCol="features", numTrees=100)
+
+# Create a pipeline to include data transformations and model training
+pipeline = Pipeline(stages=[rf])
+
+# Fit the model on the training data
+model = pipeline.fit(train_data)
+
+# Save the trained model
+model.save("/mnt/delta/fraud_detection_model/")

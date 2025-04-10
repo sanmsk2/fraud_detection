@@ -1,0 +1,55 @@
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import  *
+from pyspark.sql.window import Window
+from pyspark.ml.feature import StringIndexer, OneHotEncoder
+from pyspark.ml import Pipeline
+from pyspark.ml.linalg import Vectors
+from pyspark.ml.feature import VectorAssembler
+
+# Start Spark session
+spark = SparkSession.builder.appName("FeatureEngineering").getOrCreate()
+
+# Read cleaned data from Silver layer
+bronze_path = "/mnt/delta/bronze_transactions/"
+df = spark.read.format("delta").load(bronze_path)
+
+# Feature Engineering Process
+
+# Add features like hour, day of week, total amount spent per user, transaction count, and average transaction amount
+df_featured = df.withColumn("hour_of_day", hour(col("timestamp"))) \
+                .withColumn("day_of_week", dayofweek(col("timestamp"))) \
+                .withColumn("total_amount_spent", sum(col("amount")).over(Window.partitionBy("user_id"))) \
+                .withColumn("transaction_count", count(col("transaction_id")).over(Window.partitionBy("user_id"))) \
+                .withColumn("avg_transaction_amount", col("total_amount_spent") / col("transaction_count"))
+
+# StringIndexer for location (if needed)
+indexer = StringIndexer(inputCol="location", outputCol="location_index")
+encoder = OneHotEncoder(inputCol="location_index", outputCol="location_onehot")
+
+# Create a pipeline for the transformations
+pipeline = Pipeline(stages=[indexer, encoder])
+
+# Fit and transform the data
+df_featured = pipeline.fit(df_featured).transform(df_featured)
+
+# Assemble all features into a vector column
+assembler = VectorAssembler(inputCols=["hour_of_day", "day_of_week", "total_amount_spent", "transaction_count", "avg_transaction_amount", "location_onehot"], outputCol="features")
+df_featured = assembler.transform(df_featured)
+
+# Drop the unnecessary columns for final dataset
+df_featured = df_featured.drop("location", "location_index", "total_amount_spent", "transaction_count", "avg_transaction_amount")
+
+# Save the feature-engineered data to Gold layer
+feature_path = "/mnt/delta/feature_engineering/"
+df_featured.write.format("delta").option("mergeSchema", "true").mode("overwrite").save(feature_path)
+
+# Split the dataset into train and test (80-20 split)
+train_data, test_data = df_featured.randomSplit([0.8, 0.2], seed=42)
+
+# Save train and test datasets (Optional)
+train_data.write.format("delta").mode("overwrite").save("/mnt/delta/train_data/")
+test_data.write.format("delta").mode("overwrite").save("/mnt/delta/test_data/")
+
+# Show a sample of the feature-engineered train data
+train_data.show(5)
+test_data.show(5)

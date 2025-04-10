@@ -1,0 +1,40 @@
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, unix_timestamp, to_timestamp
+from pyspark.sql.types import *
+import json
+
+# Initialize Spark session
+spark = SparkSession.builder.appName("TransactionDataCleaning").getOrCreate()
+
+# Read the Bronze data from Delta table (raw transactions)
+bronze_df = spark.read.format("delta").load("/mnt/delta/bronze_transactions/")
+
+# 1. Remove Duplicates based on 'transaction_id'
+silver_df = bronze_df.dropDuplicates(["transaction_id"])
+
+# 2. Handle Missing or Null Values: Fill 'null' values in key columns
+silver_df = silver_df.na.fill({"amount": 0.0, "timestamp": "1970-01-01T00:00:00"})
+
+# 3. Validate and Correct Invalid Values
+# - Remove invalid 'amount' (negative or zero)
+silver_df = silver_df.filter(col("amount") > 0)
+
+# - Remove invalid 'is_fraud' values (anything other than 0 or 1)
+silver_df = silver_df.filter(col("is_fraud").isin([0, 1]))
+
+# - Remove invalid 'timestamp' values (invalid date format)
+silver_df = silver_df.filter(unix_timestamp(col("timestamp"), "yyyy-MM-dd'T'HH:mm:ss.SSSSSS").isNotNull())
+
+# 4. Cast 'timestamp' column to TimestampType
+silver_df = silver_df.withColumn("timestamp", to_timestamp(col("timestamp")))
+
+# 5. Write the Cleaned Data to the Silver Delta Table (as a batch)
+silver_path = "/mnt/delta/silver_transactions/"
+
+# Write the cleaned data to Silver layer as Delta format (batch)
+silver_df.write.format("delta").mode("overwrite").save(silver_path)
+
+# Alternatively, you can write it as Parquet if you prefer:
+# silver_df.write.parquet("/mnt/silver_transactions/")
+
+print(f"Cleaned data written to Silver layer at {silver_path}")

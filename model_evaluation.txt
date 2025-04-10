@@ -1,0 +1,11 @@
+from pyspark.ml.evaluation import BinaryClassificationEvaluator
+
+# Predict on the test data
+predictions = model.transform(test_data)
+
+# Evaluate the model performance using AUC (Area Under ROC Curve)
+evaluator = BinaryClassificationEvaluator(labelCol="is_fraud")
+
+# AUC score for evaluation
+auc = evaluator.evaluate(predictions)
+print(f"AUC (Area Under Curve) score: {auc}")

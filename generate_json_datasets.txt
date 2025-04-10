@@ -1,0 +1,27 @@
+import json
+import random
+from datetime import datetime, timedelta
+
+#Generate 500 records
+records = []
+locations = ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix", "Philadelphia", "San Antonio", "San Diego", "Dallas", "San Jose", "Austin", "Jacksonville", "San Francisco", "Indianapolis", "Columbus", "Fort Worth", "Charlotte", "Detroit", "El Paso", "Memphis"]
+device_types = ["mobile", "web", "ATM"]
+
+for i in range(500):
+    timestamp = (datetime.now() - timedelta(minutes=random.randint(0, 5000))).isoformat()
+    transaction = {
+        "transaction_id": f"T{i+1:04d}",
+        "timestamp": timestamp,
+        "user_id": f"U{random.randint(1000, 9999)}",
+        "amount": round(random.uniform(10.0, 5000.0), 2),
+        "location": random.choice(locations),
+        "device_type": random.choice(device_types),
+        "is_fraud": 1 if random.random() < 0.1 else 0  # 10% fraud cases
+    }
+    records.append(transaction)
+
+# Save to mounted storage as JSON
+output_path = "/mnt/raw-transactions/fake_transactions.json"
+dbutils.fs.put(output_path, json.dumps(records), overwrite=True)
+
+print(f"Saved 500 fake transactions to {output_path}")

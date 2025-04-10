@@ -1,0 +1,35 @@
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+# Read data from Silver Layer (Delta table)
+silver_df = spark.read.format("delta").load("/mnt/delta/silver_transactions/")
+
+# Perform the aggregation for the Gold Layer
+gold_df = silver_df.groupBy("location", "device_type", "is_fraud").agg(
+    count("transaction_id").alias("transaction_count"),
+    sum("amount").alias("total_amount"),
+    avg("amount").alias("average_amount")
+)
+
+# Optionally, perform any additional transformations, like adding a "fraud label" column
+gold_df = gold_df.withColumn(
+    "fraud_label", 
+    when(col("is_fraud") == 1, "Fraud").otherwise("Non-Fraud")
+)
+
+# Reorder columns to the desired order (after aggregation)
+gold_df = gold_df.select(
+    "location",           # First column: Location
+    "device_type",        # Second column: Device Type
+    "fraud_label",        # Third column: Fraud Label
+    "transaction_count",  # Fourth column: Transaction Count
+    "total_amount",       # Fifth column: Total Amount
+    "average_amount",     # Sixth column: Average Amount
+    "is_fraud"            # Last column: Fraud Flag
+)
+
+# Save the aggregated and reordered data to the Gold layer (Delta format)
+gold_path = "/mnt/delta/gold_transactions/"
+gold_df.write.format("delta").mode("overwrite").save(gold_path)
+
+print(f"Gold Layer with Aggregation saved to {gold_path}")

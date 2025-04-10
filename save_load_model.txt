@@ -1,0 +1,9 @@
+# Save the trained model
+model.save("/mnt/delta/fraud_detection_model/")
+
+# Load the model for future predictions
+from pyspark.ml import PipelineModel
+loaded_model = PipelineModel.load("/mnt/delta/fraud_detection_model/")
+
+# Predict fraud on new data
+new_predictions = loaded_model.transform(new_data_transformed)

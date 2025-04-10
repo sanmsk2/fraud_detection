@@ -1,0 +1,35 @@
+from pyspark.sql.types import *
+from pyspark.sql.functions import *
+
+# Define the schema based on the root structure
+schema = StructType([
+    StructField("amount", DoubleType(), True),
+    StructField("device_type", StringType(), True),
+    StructField("is_fraud", LongType(), True),  # Will be cast to IntegerType later
+    StructField("location", StringType(), True),
+    StructField("timestamp", StringType(), True),  # We'll convert this to TimestampType
+    StructField("transaction_id", StringType(), True),
+    StructField("user_id", StringType(), True)
+])
+
+# Path to the mounted storage
+raw_path = "/mnt/raw-transactions/"
+checkpoint_path = "/mnt/checkpoints/bronze_transactions/"
+bronze_path = "/mnt/delta/bronze_transactions/"
+
+# Stream the data from the raw mount point using Auto Loader
+df_stream = (
+    spark.readStream.format("cloudFiles")
+    .option("cloudFiles.format", "json")
+    .schema(schema)  # Apply schema to the data
+    .load(raw_path)  # Path to the raw data
+)
+
+# Convert 'timestamp' column to TimestampType
+df_stream = df_stream.withColumn("timestamp", to_timestamp(col("timestamp")))
+
+# Cast 'is_fraud' from LongType to IntegerType for consistency
+df_stream = df_stream.withColumn("is_fraud", col("is_fraud").cast(IntegerType()))
+
+# Write the data to the Bronze Delta table
+df_stream.writeStream.format("delta").outputMode("append").option("checkpointLocation", checkpoint_path).start(bronze_path)
