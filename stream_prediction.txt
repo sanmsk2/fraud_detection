@@ -1,0 +1,17 @@
+# Assuming you have set up a streaming data source (e.g., Kafka, Delta Lake)
+from pyspark.sql.functions import col
+
+# Stream new transactions (Assuming you have a stream source)
+stream_data = spark.readStream.format("delta").load("/mnt/delta/new_transactions/")
+
+# Apply feature engineering (same as you did for training)
+stream_transformed = pipeline.transform(stream_data)
+
+# Predict fraud on the stream data
+stream_predictions = loaded_model.transform(stream_transformed)
+
+# Output the predictions
+query = stream_predictions.select("transaction_id", "prediction", "probability") \
+    .writeStream.format("console").outputMode("append").start()
+
+query.awaitTermination()
