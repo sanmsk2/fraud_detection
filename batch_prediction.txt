@@ -1,0 +1,35 @@
+from pyspark.sql import SparkSession
+from pyspark.ml import PipelineModel
+from pyspark.sql.functions import col
+
+# Initialize Spark session
+spark = SparkSession.builder \
+    .appName("Batch Fraud Detection Prediction") \
+    .getOrCreate()
+
+# Load batch input transaction data
+input_path = "/mnt/raw_transactions/batch_input/"
+df_batch = spark.read.json(input_path)
+
+# Optional: Basic transformation (you can include your actual feature logic here)
+df_transformed = df_batch.withColumn("amount_log", col("amount") + 1)
+
+# Load the saved ML model
+model_path = "/mnt/delta/fraud_detection_model/"
+model = PipelineModel.load(model_path)
+
+# Run prediction on batch data
+predictions = model.transform(df_transformed)
+
+# Select prediction output
+output = predictions.select("transaction_id", "prediction", "probability")
+
+# Show prediction result
+output.show(truncate=False)
+
+# Save predictions (optional)
+output_path = "/mnt/raw_transactions/prediction_output/"
+output.write.mode("overwrite").json(output_path)
+
+# Stop Spark session
+spark.stop()
